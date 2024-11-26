@@ -1,12 +1,17 @@
-from flask import Flask, request, Response, jsonify
+from flask import Flask, request, jsonify
 import os
 import inference
 import json
 import numpy as np
-import pandas as pd
+import logging
 
 app = Flask(__name__)
 
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# Helper function to handle numpy types during JSON serialization
 def np_encoder(object):
     if isinstance(object, np.generic):
         return object.item()
@@ -14,37 +19,49 @@ def np_encoder(object):
 @app.route('/predict', methods=['POST'])
 def predict():
     if 'file' not in request.files:
+        logger.error("No file uploaded")
         return jsonify({'error': 'No file uploaded'}), 400
 
     file = request.files['file']
 
-    temp_dir = os.getenv("TEMP", "/tmp")  # Temporary directory for saving uploaded files
+    # Use the environment variable for temporary directory or default to "/tmp"
+    temp_dir = os.getenv("TEMP", "/tmp")
     file_path = os.path.join(temp_dir, file.filename)
 
     try:
         # Save the uploaded file temporarily
         file.save(file_path)
+        logger.info(f"File saved to {file_path}")
 
-        # Call the inference method from the inference module
-        example_model_path = "svm_model.pkl"  # Update as needed
-        example_scaler_path = "scaler.pkl"   # Update as needed
+        # Update the model and scaler paths as needed
+        example_model_path = "svm_model.pkl"
+        example_scaler_path = "scaler.pkl"
 
-        # Perform inference
+        # Call the inference function (assuming it's correctly implemented in your 'inference' module)
         result = inference.inference(file_path, example_model_path, example_scaler_path)
 
-        # Return result as JSON
-        obj = {
-            "result": np.int64(result),
+        # Prepare the result as a JSON response
+        response = {
+            "result": result,  # result is assumed to be a scalar value (int, float)
         }
-        return json.dumps(obj, default=np_encoder)
+
+        # Return the response with the correct Content-Type header
+        return jsonify(response)
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Log the error for debugging purposes
+        logger.error(f"Error during prediction: {e}")
+        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
     finally:
-        # Clean up the file after processing
+        # Clean up the uploaded file after processing, even if an error occurs
         if os.path.exists(file_path):
-            os.remove(file_path)
+            try:
+                os.remove(file_path)
+                logger.info(f"File {file_path} deleted after processing.")
+            except Exception as e:
+                logger.error(f"Error deleting file {file_path}: {str(e)}")
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    # Run the Flask app on all interfaces (0.0.0.0) and port 5000
+    app.run(host='0.0.0.0', port=5000, debug=True)
