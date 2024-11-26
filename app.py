@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 import os
 import inference
-import json
 import numpy as np
 import logging
 
@@ -10,11 +9,6 @@ app = Flask(__name__)
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-# Helper function to handle numpy types during JSON serialization
-def np_encoder(object):
-    if isinstance(object, np.generic):
-        return object.item()
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -40,9 +34,12 @@ def predict():
         # Call the inference function (assuming it's correctly implemented in your 'inference' module)
         result = inference.inference(file_path, example_model_path, example_scaler_path)
 
-        # Prepare the result as a JSON response
+        # Ensure the result is a Python native type (e.g., int) and not a numpy type
+        result = int(result)  # Convert numpy.int64 to a native Python int
+
+        # Prepare the result as a JSON response and return it
         response = {
-            "result": result,  # result is assumed to be a scalar value (int, float)
+            "result": result,  # Now 'result' is a native Python int
         }
 
         # Return the response with the correct Content-Type header
